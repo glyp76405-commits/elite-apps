@@ -2,154 +2,148 @@ import requests
 from bs4 import BeautifulSoup
 from flask import Flask, render_template_string, request, jsonify
 import os
-import base64
 
 app = Flask(__name__)
 
-# --- [ إعدادات القيسر VIP - النسخة النهائية ] ---
+# --- [ إعدادات إمبراطورية القيسر VIP ] ---
 STORE_NAME = "ELITE APPS"
 MY_WALLET = "TKBk4KVrtp1qEaWNiZUZyxM3GtfSppffxE"
 LOG_FILE = "verified_orders.log"
-ADMIN_USER = "HGLKJRL"
-ASSISTANT_USER = "m_89_n_u"
 
-MONEY_KEYWORDS = ['mod', 'premium', 'vip', 'unlocked', 'mega menu', 'cheat', 'hack', 'pro']
+# كلمات كشف الـ VIP التلقائي
+VIP_WORDS = ['mod', 'premium', 'vip', 'unlocked', 'cheat', 'hack', 'mega', 'pro']
 
 if not os.path.exists(LOG_FILE):
     open(LOG_FILE, "a").close()
 
-def fetch_all_apps():
-    free_list = []
-    vip_auto_list = []
-    try:
-        # المحاولة الأولى: السحب من المصدر الأساسي بتشفير متصفح
-        url = "https://liteapks.com/trending"
-        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
-        response = requests.get(url, headers=headers, timeout=10)
-        soup = BeautifulSoup(response.text, 'html.parser')
-        cards = soup.select('article')
-        
-        for card in cards:
-            title = card.find('h3').text.strip() if card.find('h3') else "App Name"
-            img = card.find('img').get('src', '') if card.find('img') else ""
-            link = card.find('a')['href'] if card.find('a') else "#"
-            if not link.startswith('http'): link = "https://liteapks.com" + link
-            
-            app_data = {'name': title, 'img': img, 'link': link}
-            if any(word in title.lower() for word in MONEY_KEYWORDS):
-                vip_auto_list.append(app_data)
-            else:
-                free_list.append(app_data)
-    except: pass
-
-    # --- [ الضربة القاضية: إذا فشل السحب، نعرض هذه الألعاب لضمان عدم خلو الموقع ] ---
-    if not free_list and not vip_auto_list:
-        free_list = [
-            {'name': 'Minecraft Pocket Edition', 'img': 'https://placehold.co/150x150/121212/00ff88?text=Minecraft', 'link': 'https://liteapks.com/minecraft.html'},
-            {'name': 'Subway Surfers Free', 'img': 'https://placehold.co/150x150/121212/00ff88?text=Subway', 'link': 'https://liteapks.com/subway-surfers.html'}
-        ]
-        vip_auto_list = [
-            {'name': 'GTA: San Andreas MOD VIP', 'img': 'https://placehold.co/150x150/121212/00ff88?text=GTA+VIP', 'link': 'https://liteapks.com/grand-theft-auto-san-andreas.html'},
-            {'name': 'Free Fire Mega Mod VIP', 'img': 'https://placehold.co/150x150/121212/00ff88?text=FreeFire+VIP', 'link': 'https://liteapks.com/garena-free-fire-1.html'}
-        ]
+def fetch_massive_data():
+    apps_pool = []
+    # السحب من أقسام متعددة لضمان "آلاف" التطبيقات
+    targets = [
+        "https://apkmody.io/games",
+        "https://apkmody.io/apps",
+        "https://apkmody.io/trending"
+    ]
+    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
     
-    return free_list, vip_auto_list
+    for url in targets:
+        try:
+            res = requests.get(url, headers=headers, timeout=10)
+            soup = BeautifulSoup(res.text, 'html.parser')
+            items = soup.select('div.flex-item') or soup.select('article')
+            for item in items:
+                title = item.find('h3').text.strip() if item.find('h3') else "New App"
+                img = item.find('img').get('src', '') if item.find('img') else ""
+                link = item.find('a')['href'] if item.find('a') else ""
+                if not link.startswith('http'): link = "https://apkmody.io" + link
+                
+                is_vip = any(w in title.lower() for w in VIP_WORDS)
+                apps_pool.append({'name': title, 'img': img, 'link': link, 'is_vip': is_vip})
+        except: continue
+    return apps_pool
 
-# --- [ واجهة المتجر الأسطورية - التعديل النهائي ] ---
 HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{{ store_name }}</title>
-    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;700&display=swap" rel="stylesheet">
+    <title>{{ name }} | المتجر الرسمي</title>
     <style>
-        :root { --main: #00ff88; --dark: #050505; --card: #121212; }
-        body { font-family: 'Cairo', sans-serif; background: var(--dark); color: white; margin: 0; padding-bottom: 80px; }
-        header { background: rgba(18,18,18,0.95); padding: 20px; border-bottom: 1px solid #333; position: sticky; top:0; z-index:100; text-align:center; }
-        header h1 { margin: 0; color: var(--main); font-size: 24px; text-shadow: 0 0 10px var(--main); }
-        .container { padding: 15px; max-width: 900px; margin: auto; }
-        #searchInput { width: 100%; padding: 15px; border-radius: 15px; border: 1px solid #333; background: #1a1a1a; color: white; margin-bottom: 20px; font-family: 'Cairo'; box-sizing: border-box; }
-        .section-title { font-size: 18px; margin: 25px 0 15px; border-right: 5px solid var(--main); padding-right: 12px; font-weight: bold; }
-        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 12px; }
-        .card { background: var(--card); border-radius: 18px; padding: 10px; text-align: center; border: 1px solid #222; position: relative; transition: 0.3s; }
-        .card:hover { border-color: var(--main); transform: scale(1.05); }
-        .card img { width: 100%; border-radius: 15px; aspect-ratio: 1/1; object-fit: cover; background: #000; }
-        .card h3 { font-size: 10px; margin: 10px 0; height: 30px; overflow: hidden; }
-        .btn { background: #222; color: white; border: none; padding: 8px; border-radius: 8px; width: 100%; font-size: 10px; cursor: pointer; font-weight: bold; font-family: 'Cairo'; }
-        .btn-vip { background: var(--main); color: black; box-shadow: 0 0 10px rgba(0,255,136,0.3); }
-        .support-btn { position: fixed; bottom: 20px; left: 20px; background: #0088cc; color: white; padding: 12px 20px; border-radius: 50px; font-weight: bold; text-decoration:none; font-size:12px; z-index:2000; }
-        .modal { display: none; position: fixed; z-index: 3000; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.95); }
-        .modal-content { background: #161616; margin: 20% auto; padding: 25px; width: 85%; max-width: 350px; border-radius: 25px; border: 1px solid var(--main); text-align: center; }
-        .wallet-box { background: #000; padding: 12px; border-radius: 12px; font-size: 10px; color: var(--main); word-break: break-all; margin: 15px 0; border: 1px dashed #444; }
+        :root { --play-green: #01875f; --gray: #5f6368; }
+        body { font-family: sans-serif; background: #fff; color: #202124; margin: 0; }
+        header { padding: 15px; border-bottom: 1px solid #e0e0e0; display: flex; align-items: center; background: #fff; position: sticky; top:0; z-index:100; }
+        .logo { font-weight: bold; color: var(--play-green); font-size: 22px; flex: 1; }
+        .search-container { background: #f1f3f4; border-radius: 8px; padding: 5px 15px; margin: 10px 20px; display: flex; }
+        .search-container input { border: none; background: transparent; width: 100%; padding: 10px; outline: none; font-size: 16px; }
+        .content { padding: 10px 20px; }
+        .app-row { display: flex; align-items: center; padding: 15px 0; border-bottom: 1px solid #f1f3f4; cursor: pointer; }
+        .app-icon { width: 65px; height: 65px; border-radius: 14px; margin-left: 15px; object-fit: cover; }
+        .app-details { flex: 1; text-align: right; }
+        .app-name { font-weight: 500; font-size: 16px; }
+        .btn-install { background: var(--play-green); color: white; border: none; padding: 8px 24px; border-radius: 4px; font-weight: 500; cursor: pointer; }
+        .vip-tag { color: #d93025; font-size: 10px; font-weight: bold; border: 1px solid #d93025; padding: 1px 4px; border-radius: 3px; margin-left: 5px; }
+        
+        .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); }
+        .modal-content { background: white; margin: 15% auto; padding: 30px; width: 85%; max-width: 400px; border-radius: 12px; text-align: center; }
+        .wallet { background: #f8f9fa; padding: 12px; border-radius: 8px; font-size: 11px; word-break: break-all; margin: 15px 0; border: 1px dashed #ccc; color: #1a73e8; font-weight: bold; }
+        .tx-input { width: 100%; padding: 12px; border: 1px solid #dadce0; border-radius: 6px; margin-bottom: 15px; box-sizing: border-box; text-align: center; }
     </style>
 </head>
 <body>
-    <header><h1>ELITE APPS 🛡️</h1></header>
-    <div class="container">
-        <input type="text" id="searchInput" placeholder="ابحث عن ألعاب وتطبيقات..." onkeyup="search()">
-        <div class="section-title">💎 إصدارات VIP الحصرية</div>
-        <div class="grid">
-            {% for app in vip_apps %}
-            <div class="card app-item">
-                <div style="position:absolute; top:5px; right:5px; background:gold; color:black; font-size:8px; padding:2px 5px; border-radius:5px; font-weight:bold;">VIP</div>
-                <img src="{{ app.img }}" onerror="this.src='https://placehold.co/100x100/121212/00ff88?text=App'">
-                <h3>{{ app.name }}</h3>
-                <button class="btn btn-vip" onclick="openPay('{{ app.name }}', '{{ app.link }}')">فتح النسخة</button>
-            </div>
-            {% endfor %}
-        </div>
-        <div class="section-title">🔥 الألعاب الشائعة</div>
-        <div class="grid">
-            {% for app in free_apps %}
-            <div class="card app-item">
-                <img src="{{ app.img }}" onerror="this.src='https://placehold.co/100x100/121212/00ff88?text=Free'">
-                <h3>{{ app.name }}</h3>
-                <a href="{{ app.link }}" target="_blank" style="text-decoration:none;"><button class="btn">تحميل مجاني</button></a>
+    <header><div class="logo">{{ name }}</div></header>
+    <div class="search-container"><input type="text" id="qs" placeholder="البحث في آلاف التطبيقات..." onkeyup="filterApps()"></div>
+    
+    <div class="content">
+        <div id="appList">
+            {% for app in apps %}
+            <div class="app-row" onclick="handleAction('{{ app.name }}', '{{ app.link }}', {{ 'true' if app.is_vip else 'false' }})">
+                <img src="{{ app.img }}" class="app-icon" onerror="this.src='https://placehold.co/65'">
+                <div class="app-details">
+                    <div class="app-name">
+                        {{ app.name }}
+                        {% if app.is_vip %}<span class="vip-tag">VIP</span>{% endif %}
+                    </div>
+                    <div style="font-size:12px; color:var(--gray);">تطبيق معتمد • يتضمن عمليات شراء</div>
+                </div>
+                <button class="btn-install">تثبيت</button>
             </div>
             {% endfor %}
         </div>
     </div>
 
-    <a href="https://t.me/{{ admin }}" class="support-btn" target="_blank">تواصل معنا</a>
-
-    <div id="payModal" class="modal">
+    <div id="pMod" class="modal">
         <div class="modal-content">
-            <h3 id="modal_title" style="color:var(--main);"></h3>
-            <p style="font-size:11px; color:#aaa;">أرسل 5 USDT (TRC20) للمحفظة:</p>
-            <div class="wallet-box">{{ wallet }}</div>
-            <input type="text" id="txid_input" style="width:100%; padding:12px; border-radius:12px; background:#222; color:white; border:none; text-align:center;" placeholder="أدخل رقم العملية TxID">
-            <button class="btn btn-vip" id="vBtn" onclick="verifyTx()" style="margin-top:15px;">تأكيد الدفع</button>
-            <div id="res_msg"></div>
-            <button onclick="closePay()" style="background:none; border:none; color:#555; margin-top:20px; cursor:pointer;">إلغاء</button>
+            <h2 id="mTit"></h2>
+            <p style="font-size:14px;">أرسل 5 USDT (TRC20) للمحفظة:</p>
+            <div class="wallet">{{ wallet }}</div>
+            <input type="text" id="tx" class="tx-input" placeholder="أدخل رمز TxID المكون من 64 حرفاً">
+            <button class="btn-install" id="vBtn" style="width:100%; padding:15px;" onclick="checkPay()">تأكيد العملية والتثبيت</button>
+            <p style="margin-top:15px; font-size:12px; color:var(--gray); cursor:pointer;" onclick="closeM()">إلغاء</p>
         </div>
     </div>
 
     <script>
-        let currentLink = "";
-        function openPay(name, link) { currentLink = link; document.getElementById('modal_title').innerText = name; document.getElementById('payModal').style.display = 'block'; }
-        function closePay() { document.getElementById('payModal').style.display = 'none'; }
-        function search() {
-            let filter = document.getElementById('searchInput').value.toLowerCase();
-            let items = document.getElementsByClassName('app-item');
-            for(let item of items) {
-                let name = item.getElementsByTagName('h3')[0].innerText.toLowerCase();
-                item.style.display = name.includes(filter) ? "" : "none";
+        let cL = "";
+        function handleAction(n, l, v) {
+            if(v) {
+                cL = l; document.getElementById('mTit').innerText = n;
+                document.getElementById('pMod').style.display = 'block';
+            } else {
+                window.location.href = l;
             }
         }
-        function verifyTx() {
-            let txid = document.getElementById('txid_input').value.trim();
-            if(txid.length < 5) { alert("رقم عملية غير صالح!"); return; }
-            document.getElementById('vBtn').innerText = "جاري التحقق...";
-            fetch(`/api/verify?txid=${txid}&link=${btoa(currentLink)}`)
-            .then(res => res.json())
-            .then(data => {
-                if(data.success) {
-                    document.getElementById('res_msg').innerHTML = `<a href='${data.download}' class='btn btn-vip' style='display:block; margin-top:15px; text-decoration:none;'>تحميل الآن 🚀</a>`;
-                    document.getElementById('vBtn').style.display = 'none';
-                } else { alert(data.error); document.getElementById('vBtn').innerText = "تأكيد الدفع"; }
+        function closeM() { document.getElementById('pMod').style.display = 'none'; }
+        
+        function checkPay() {
+            let t = document.getElementById('tx').value.trim();
+            // 🛡️ التحقق الذكي: يجب أن يكون 64 حرفاً (Hexadecimal)
+            let txPattern = /^[a-fA-F0-9]{64}$/;
+
+            if(!txPattern.test(t)) {
+                alert("❌ خطأ: الرمز المدخل عشوائي أو غير صحيح. يجب إدخال رمز TxID الحقيقي المكون من 64 حرفاً.");
+                return;
+            }
+
+            document.getElementById('vBtn').innerText = "جاري التحقق من البلوكشين...";
+            
+            fetch(`/verify?tx=${t}`).then(r => r.json()).then(d => {
+                if(d.ok) { 
+                    alert("✅ تم التحقق بنجاح! سيبدأ التحميل الآن.");
+                    window.location.href = cL; 
+                } else { 
+                    alert("⚠️ عذراً: " + d.msg);
+                    document.getElementById('vBtn').innerText = "تأكيد العملية والتثبيت";
+                }
             });
+        }
+
+        function filterApps() {
+            let f = document.getElementById('qs').value.toLowerCase();
+            let rows = document.getElementsByClassName('app-row');
+            for(let r of rows) {
+                r.style.display = r.innerText.toLowerCase().includes(f) ? "flex" : "none";
+            }
         }
     </script>
 </body>
@@ -157,22 +151,19 @@ HTML_TEMPLATE = """
 """
 
 @app.route('/')
-def index():
-    free, vip = fetch_all_apps()
-    return render_template_string(HTML_TEMPLATE, store_name=STORE_NAME, wallet=MY_WALLET, free_apps=free, vip_apps=vip, admin=ADMIN_USER)
+def home():
+    data = fetch_massive_data()
+    return render_template_string(HTML_TEMPLATE, name=STORE_NAME, wallet=MY_WALLET, apps=data)
 
-@app.route('/api/verify')
+@app.route('/verify')
 def verify():
-    txid = request.args.get('txid', '').strip()
-    encoded_link = request.args.get('link')
-    try:
-        download_link = base64.b64decode(encoded_link).decode('utf-8')
+    tx = request.args.get('tx')
+    if os.path.exists(LOG_FILE):
         with open(LOG_FILE, "r") as f:
-            if txid in f.read().splitlines(): return jsonify(success=False, error="رقم العملية مستخدم سابقاً!")
-        with open(LOG_FILE, "a") as f: f.write(txid + "\n")
-        return jsonify(success=True, download=download_link)
-    except: return jsonify(success=False, error="خطأ في التحقق.")
+            if tx in f.read(): return jsonify(ok=False, msg="هذا الرمز مستخدم مسبقاً!")
+    with open(LOG_FILE, "a") as f: f.write(tx + "\n")
+    return jsonify(ok=True)
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 8080)))
-             
+    
