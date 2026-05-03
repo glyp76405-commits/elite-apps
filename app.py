@@ -1,4 +1,4 @@
-        import requests
+import requests
 from bs4 import BeautifulSoup
 from flask import Flask, render_template_string, request, jsonify
 import os
@@ -23,20 +23,29 @@ def fetch_all_apps():
     vip_auto_list = []
     try:
         url = "https://liteapks.com/trending"
-        headers = {'User-Agent': 'Mozilla/5.0'}
-        response = requests.get(url, headers=headers, timeout=10)
+        # تمويه احترافي لكسر حماية الموقع المصدر
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36',
+            'Accept-Language': 'en-US,en;q=0.9',
+            'Referer': 'https://google.com'
+        }
+        response = requests.get(url, headers=headers, timeout=15)
         soup = BeautifulSoup(response.text, 'html.parser')
         
-        # البحث عن العناصر (التحديث الأخير للموقع المستهدف)
-        cards = soup.select('article.post-item') or soup.select('article.item')
+        # البحث عن كروت الألعاب (تحديث المسارات)
+        cards = soup.find_all('article')
         
         for card in cards:
-            title_tag = card.find('h2') or card.find('h3')
+            title_tag = card.find('h3') or card.find('h2')
             if not title_tag: continue
             
             name = title_tag.text.strip()
-            img = card.find('img').get('src', '') if card.find('img') else ""
-            link = card.find('a')['href'] if card.find('a') else "#"
+            img_tag = card.find('img')
+            img = img_tag.get('data-src') or img_tag.get('src', '') if img_tag else ""
+            
+            link_tag = card.find('a')
+            if not link_tag: continue
+            link = link_tag['href']
             if not link.startswith('http'): link = "https://liteapks.com" + link
             
             is_vip = any(word in name.lower() for word in MONEY_KEYWORDS)
@@ -45,7 +54,7 @@ def fetch_all_apps():
             if is_vip: vip_auto_list.append(app_data)
             else: free_list.append(app_data)
     except Exception as e:
-        print(f"Fetch Error: {e}")
+        print(f"Error: {e}")
     return free_list, vip_auto_list
 
 # --- [ واجهة المتجر الأسطورية ] ---
@@ -67,7 +76,7 @@ HTML_TEMPLATE = """
         .section-title { font-size: 18px; margin: 25px 0 15px; border-right: 5px solid var(--main); padding-right: 12px; font-weight: bold; }
         .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 12px; }
         .card { background: var(--card); border-radius: 18px; padding: 10px; text-align: center; border: 1px solid #222; position: relative; }
-        .card img { width: 100%; border-radius: 15px; aspect-ratio: 1/1; object-fit: cover; }
+        .card img { width: 100%; border-radius: 15px; aspect-ratio: 1/1; object-fit: cover; background: #222; }
         .card h3 { font-size: 10px; margin: 10px 0; height: 30px; overflow: hidden; }
         .btn { background: #222; color: white; border: none; padding: 8px; border-radius: 8px; width: 100%; font-size: 10px; cursor: pointer; font-weight: bold; font-family: 'Cairo'; }
         .btn-vip { background: var(--main); color: black; }
@@ -79,23 +88,23 @@ HTML_TEMPLATE = """
 <body>
     <header><h1>{{ store_name }} 🛡️</h1></header>
     <div class="container">
-        <input type="text" id="searchInput" placeholder="ابحث عن ألعاب وتطبيقات...">
+        <input type="text" id="searchInput" placeholder="ابحث عن ألعاب وتطبيقات..." onkeyup="search()">
         <div class="section-title">إصدارات VIP الحصرية 💎</div>
-        <div class="grid">
+        <div class="grid" id="vip_grid">
             {% for app in vip_apps %}
-            <div class="card">
+            <div class="card app-card">
                 <div style="position:absolute; top:5px; right:5px; background:gold; color:black; font-size:8px; padding:2px 5px; border-radius:5px; font-weight:bold;">VIP</div>
-                <img src="{{ app.img }}">
+                <img src="{{ app.img }}" onerror="this.src='https://placehold.co/150x150/121212/00ff88?text=App'">
                 <h3>{{ app.name }}</h3>
                 <button class="btn btn-vip" onclick="openPay('{{ app.name }}', '{{ app.link }}')">فتح النسخة</button>
             </div>
             {% endfor %}
         </div>
         <div class="section-title">الألعاب الشائعة 🔥</div>
-        <div class="grid">
+        <div class="grid" id="free_grid">
             {% for app in free_apps %}
-            <div class="card">
-                <img src="{{ app.img }}">
+            <div class="card app-card">
+                <img src="{{ app.img }}" onerror="this.src='https://placehold.co/150x150/121212/00ff88?text=Free'">
                 <h3>{{ app.name }}</h3>
                 <a href="{{ app.link }}" target="_blank" style="text-decoration:none;"><button class="btn">تحميل مجاني</button></a>
             </div>
@@ -108,7 +117,7 @@ HTML_TEMPLATE = """
             <h3 id="modal_title"></h3>
             <p style="font-size:11px; color:#aaa;">أرسل 5 USDT (TRC20) للمحفظة:</p>
             <div class="wallet-box">{{ wallet }}</div>
-            <input type="text" id="txid_input" style="width:100%; padding:10px; border-radius:10px; background:#222; color:white; border:none;" placeholder="TxID">
+            <input type="text" id="txid_input" style="width:100%; padding:10px; border-radius:10px; background:#222; color:white; border:none;" placeholder="أدخل رقم العملية TxID">
             <button class="btn btn-vip" id="vBtn" onclick="verifyTx()" style="margin-top:10px;">تأكيد الدفع</button>
             <div id="res_msg"></div>
             <button onclick="closePay()" style="background:none; border:none; color:#555; margin-top:10px;">إلغاء</button>
@@ -119,15 +128,27 @@ HTML_TEMPLATE = """
         let currentLink = "";
         function openPay(name, link) { currentLink = link; document.getElementById('modal_title').innerText = name; document.getElementById('payModal').style.display = 'block'; }
         function closePay() { document.getElementById('payModal').style.display = 'none'; }
+        
+        function search() {
+            let filter = document.getElementById('searchInput').value.toLowerCase();
+            let cards = document.getElementsByClassName('app-card');
+            for(let card of cards) {
+                let name = card.getElementsByTagName('h3')[0].innerText.toLowerCase();
+                card.style.display = name.includes(filter) ? "" : "none";
+            }
+        }
+
         function verifyTx() {
             let txid = document.getElementById('txid_input').value.trim();
-            if(txid.length < 10) { alert("TxID قصير جداً!"); return; }
+            if(txid.length < 10) { alert("TxID غير صحيح!"); return; }
+            document.getElementById('vBtn').innerText = "جاري التحقق...";
             fetch(`/api/verify?txid=${txid}&link=${btoa(currentLink)}`)
             .then(res => res.json())
             .then(data => {
                 if(data.success) {
-                    document.getElementById('res_msg').innerHTML = `<a href='${data.download}' class='btn btn-vip' style='display:block; margin-top:10px;'>تحميل الآن 🚀</a>`;
-                } else { alert(data.error); }
+                    document.getElementById('res_msg').innerHTML = `<a href='${data.download}' class='btn btn-vip' style='display:block; margin-top:10px; text-decoration:none;'>تحميل الآن 🚀</a>`;
+                    document.getElementById('vBtn').style.display = 'none';
+                } else { alert(data.error); document.getElementById('vBtn').innerText = "تأكيد الدفع"; }
             });
         }
     </script>
@@ -147,12 +168,13 @@ def verify():
     try:
         download_link = base64.b64decode(encoded_link).decode('utf-8')
         with open(LOG_FILE, "r") as f:
-            if txid in f.read().splitlines(): return jsonify(success=False, error="TxID مستخدم!")
-        # في النسخة المجانية، يتم القبول آلياً أو يمكنك تفعيل API Trongrid هنا
+            if txid in f.read().splitlines(): return jsonify(success=False, error="رقم العملية مستخدم من قبل!")
+        
+        # قبول آلي لأي TxID صحيح (يمكن ربطها بـ API Trongrid لاحقاً)
         with open(LOG_FILE, "a") as f: f.write(txid + "\n")
         return jsonify(success=True, download=download_link)
     except: return jsonify(success=False, error="خطأ في التحقق.")
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 8080)))
-            
+        
